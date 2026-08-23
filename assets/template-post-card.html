@@ -63,11 +63,12 @@
       overflow: hidden;
       isolation: isolate;
     }
-    /* 圆角描边——贴着卡片边缘画一圈，不裁切、不改画布尺寸，
+    /* 圆角描边——离画布边缘缩进 2px 再画，不贴边。贴边会跟纸张边缘重叠，
+       全屏查看时容易被裁切/压掉，看不见描边。不裁切内容、不改画布尺寸，
        所以内容框的固定像素预算不受影响。 */
     .poster::after {
       content: "";
-      position: absolute; inset: 0;
+      position: absolute; inset: 2px;
       border-radius: 32px;
       box-shadow: 0 0 0 2px var(--accent) inset;
       pointer-events: none;
