@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>[必填] 替换为账号名 · Social Photo Cards</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    /* =========================================================
+       Social Photo Cards — 1 card = header + 1–2 段短文案 + 1 张图
+       ---------------------------------------------------------
+       ONE board size: .poster = 1080×1440
+       Content box after padding = 920 × 1344
+       intro 字号/行高：38px/1.75 → 每行 66.5px，每行 ≤24 字宽（实测标定，见 layout-spec.md）
+
+       Fixed vertical order, no others:
+         profile-head → intro → photo → grow
+
+       All sizes are FIXED. Do not add inline font-size / font-weight.
+       ========================================================= */
+
+    :root {
+      --paper: #ffffff; --ink: #111111;
+      --grey-2: #e7e6e1; --grey-3: #8a8a86;
+      --accent: #ff6b35; /* 边框 + 昵称共用的强调色，不做多套切换 */
+      --verified: #1d6fd6; /* 认证图标专用，独立于 accent，固定蓝色 */
+      --sans:    "Inter", "Helvetica Neue", Helvetica, "Noto Sans SC",
+                 -apple-system, "PingFang SC", "Microsoft YaHei UI", sans-serif;
+      --sans-zh: "Noto Sans SC", -apple-system, "PingFang SC",
+                 "Microsoft YaHei UI", "Inter", sans-serif;
+      --mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+
+      /* ---------- 账号身份：整批卡片只配置这一次 ----------
+         头像/昵称/bio 通常整批复用同一个账号，所以不放进每张卡的 markup 里，
+         改这三行，所有 .poster 自动同步，不用逐张卡复制粘贴保持一致。
+         默认值就是这个 skill 绑定的固定账号（头像存在 assets/account/ 里，
+         用 skill 内的绝对路径引用，不用每次任务目录都拷一份）——换账号才需要改。 */
+      --account-avatar: url("/Users/limoyu/.claude/skills/social-post-card/assets/account/avatar.jpg");
+      --account-name: "未来的哇咔咔";
+      --account-bio: "专注于需求研究、副业机会分析";
+    }
+
+    *,*::before,*::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #1a1a1a;
+      font-family: var(--sans);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      padding: 64px 32px;
+    }
+    .sheet { display: flex; flex-direction: column; align-items: center; gap: 48px; }
+
+    .poster {
+      position: relative;
+      width: 1080px;
+      height: 1440px;
+      background: var(--paper);
+      color: var(--ink);
+      overflow: hidden;
+      isolation: isolate;
+    }
+    /* 圆角描边——贴着卡片边缘画一圈，不裁切、不改画布尺寸，
+       所以内容框的固定像素预算不受影响。 */
+    .poster::after {
+      content: "";
+      position: absolute; inset: 0;
+      border-radius: 32px;
+      box-shadow: 0 0 0 2px var(--accent) inset;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      padding: 48px 80px;      /* content box: 920 × 1344 */
+      display: flex;
+      flex-direction: column;
+    }
+    .grow { flex: 1 1 auto; }
+    p { margin: 0; }
+
+    /* ---------- profile-head：头像 + 昵称 + 认证 + bio，右侧页码 ----------
+       固定高度 152px = 104(头像行) + 48(margin-bottom)。不加分割线——头像区和正文
+       靠间距分隔就够了，一条线反而多余。这一块和下面的 photo 都是定高，intro 的
+       行数预算由它俩倒推，所以这里的任何数值改动都要连带更新 references/layout-spec.md。 */
+    .profile-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 48px;
+    }
+    .profile-id { display: flex; align-items: center; gap: 24px; }
+    .avatar {
+      width: 104px; height: 104px; border-radius: 50%; flex: 0 0 auto;
+      background: var(--grey-2) var(--account-avatar) center / cover no-repeat;
+    }
+    .profile-text { display: flex; flex-direction: column; gap: 6px; }
+    .profile-name {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--sans-zh); font-weight: 700; font-size: 38px;
+      line-height: 1.2; color: var(--accent);
+    }
+    .name-text::after { content: var(--account-name); }
+    .verified { width: 40px; height: 40px; fill: var(--verified); flex: 0 0 auto; }
+    .profile-bio {
+      font-family: var(--sans-zh); font-weight: 400; font-size: 24px;
+      line-height: 1.25; color: var(--grey-3);
+    }
+    .profile-bio::after { content: var(--account-bio); }
+    .page-index {
+      font-family: var(--mono); font-weight: 500; font-size: 24px;
+      letter-spacing: .12em; color: var(--grey-3); flex: 0 0 auto;
+    }
+
+    /* ---------- intro：1–2 段，行数预算见 layout-spec.md ----------
+       每段第一句是这段的总结句，加粗 + 下划线；用 <strong> 包住，不是 <em>。 */
+    .intro p {
+      font-family: var(--sans-zh); font-weight: 400;
+      font-size: 38px; line-height: 1.75;
+      color: var(--ink);
+    }
+    .intro p + p { margin-top: 28px; }
+    .intro strong {
+      font-weight: 700; text-decoration: underline;
+      text-decoration-thickness: 2px; text-underline-offset: 5px;
+    }
+    .intro { margin-bottom: 32px; }
+
+    /* ---------- photo：固定 920×460（2:1），拉伸铺满，不裁切 ---------- */
+    .photo-frame { width: 920px; height: 460px; border-radius: 24px; overflow: hidden; flex: 0 0 auto; }
+    .photo-frame img { display: block; width: 100%; height: 100%; object-fit: fill; }
+
+    /* ---------- Guardrails ---------- */
+    .poster *[style*="border-radius"],
+    .poster *[style*="box-shadow"],
+    .poster *[style*="font-size"],
+    .poster *[style*="font-weight"] { outline: 4px solid red !important; }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+
+    <!-- ============================================================
+         PAGE 01 — 复制这个 section 为每一张卡，id 依次 p01 / p02 …
+         页码 .page-index 按 “当前页 / 总页数” 填，如 3 张卡就是 01/03 02/03 03/03
+         ============================================================ -->
+    <section class="poster" id="p01">
+      <div class="content">
+        <div class="profile-head">
+          <div class="profile-id">
+            <div class="avatar" aria-hidden="true"></div>
+            <div class="profile-text">
+              <span class="profile-name"><span class="name-text"></span>
+                <svg class="verified" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M1006.652621 469.673144l-114.751779-114.751778V192.356347a60.318243 60.318243 0 0 0-60.318242-59.950449H669.385374L554.633596 17.65412a59.950448 59.950448 0 0 0-84.960452 0L354.921366 132.405898H192.356347A59.950448 59.950448 0 0 0 132.405898 192.356347v162.565019L17.65412 469.673144a59.950448 59.950448 0 0 0 0 84.960452L132.405898 669.385374v162.197226a59.950448 59.950448 0 0 0 59.950449 59.950448h162.565019l114.751778 115.119573a60.686037 60.686037 0 0 0 84.960452 0l114.751778-115.119573h162.197226a60.318243 60.318243 0 0 0 60.318242-59.950448V669.385374l114.751779-114.751778a60.686037 60.686037 0 0 0 0-84.960452z m-36.779417 49.652212l-116.590749 116.59075a44.503094 44.503094 0 0 0-12.872796 31.262503v164.403991a10.666031 10.666031 0 0 1-10.66603 10.66603h-162.56502a43.767505 43.767505 0 0 0-31.262503 12.872796l-116.222956 116.222955a10.298237 10.298237 0 0 1-15.07956 0l-116.222955-116.222955a43.767505 43.767505 0 0 0-31.262504-12.872796H192.356347a10.666031 10.666031 0 0 1-10.298237-10.66603v-164.403991a43.399711 43.399711 0 0 0-13.24059-31.262503l-116.222955-116.59075a10.298237 10.298237 0 0 1 0-14.711766l116.222955-116.222955a44.135299 44.135299 0 0 0 13.24059-31.630298V192.356347A10.298237 10.298237 0 0 1 192.356347 183.897081h164.771784a44.135299 44.135299 0 0 0 31.262504-13.24059l118.061926-118.061926a11.033825 11.033825 0 0 1 7.355883-2.942353 11.401619 11.401619 0 0 1 7.723677 2.942353l116.222955 116.222955a44.135299 44.135299 0 0 0 31.262504 13.24059h164.40399a10.298237 10.298237 0 0 1 10.666031 10.298237V356.760337a45.606476 45.606476 0 0 0 12.872796 31.630298l116.590749 116.222955a10.298237 10.298237 0 0 1-1.838971 14.711766z"/><path d="M693.659789 331.014746l-187.207228 274.374444-141.232958-110.338248c-16.182943 0-24.642209 8.459266-24.642209 26.848973l176.173403 159.254872 207.803702-331.014745c5.516912-9.930442-23.538826-31.262504-30.89471-19.125296z"/></svg>
+              </span>
+              <span class="profile-bio"></span>
+            </div>
+          </div>
+          <span class="page-index">01 / 01</span>
+        </div>
+
+        <div class="intro">
+          <p><strong>这一句是本段总结句，加粗加下划线。</strong>后面接展开说明，按 references/layout-spec.md 的行预算表控制总行数，7–10 行为宜，不要靠改字号解决溢出。</p>
+        </div>
+
+        <div class="photo-frame">
+          <img src="{{图片路径}}" alt="">
+        </div>
+
+        <div class="grow"></div>
+      </div>
+    </section>
+
+  </main>
+</body>
+</html>
