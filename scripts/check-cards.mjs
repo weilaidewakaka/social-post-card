@@ -50,6 +50,15 @@ const sections = [...html.matchAll(/<section[^>]*class="[^"]*\bposter\b[^"]*"[^>
 if (!sections.length) fail('deck', '没有 .poster');
 const N = sections.length;
 
+// ---------- 出图模式：单页 = 1 张内容卡；长文 = 1 张封面卡（.cover）+ ≥1 张内容卡 ----------
+const isCoverSec = (s) => /<section[^>]*class="[^"]*\bcover\b/i.test(s);
+const coverIdx = sections.map((s, i) => (isCoverSec(s) ? i : -1)).filter((i) => i >= 0);
+if (coverIdx.length > 1) fail('deck', `出现 ${coverIdx.length} 张封面卡（.cover），整批最多 1 张`);
+else if (coverIdx.length === 1) {
+  if (coverIdx[0] !== 0) fail('deck', '封面卡（.cover）必须是第 1 张');
+  if (N < 2) fail('deck', '长文模式至少要 1 张章节卡，只有封面不成立');
+} else if (N > 1) fail('deck', `${N} 张卡但没有封面卡：单页模式只能 1 张，多张必须是长文模式（第 1 张带 .cover）`);
+
 // ---------- account config（整批只配置一次，在 :root 里）----------
 const rootBlock = (html.match(/:root\s*\{([\s\S]*?)\}/) || [, ''])[1];
 const avatarVar = /--account-avatar:\s*url\("([^"]*)"\)/.exec(rootBlock);
@@ -62,6 +71,17 @@ if (!nameVar || !nameVar[1] || nameVar[1].includes('{{')) fail('account', '--acc
 else if (width(nameVar[1]) > 10) fail('account', `--account-name ${width(nameVar[1])} 字宽，上限 10`);
 if (!bioVar || !bioVar[1] || bioVar[1].includes('{{')) fail('account', '--account-bio 缺少真实 bio（还是占位符）');
 else if (width(bioVar[1]) > 22) fail('account', `--account-bio ${width(bioVar[1])} 字宽，上限 22`);
+
+// ---------- accent 颜色（body class，整批只配置一次，固定二选一）----------
+const bodyClassMatch = html.match(/<body[^>]*class="([^"]*)"/i);
+const ACCENT_CLASSES = ['accent-orange', 'accent-blue'];
+if (!bodyClassMatch) fail('accent', '<body> 缺少 class，应为 accent-orange 或 accent-blue 之一');
+else {
+  const bodyClasses = bodyClassMatch[1].trim().split(/\s+/);
+  const accentClasses = bodyClasses.filter((c) => c.startsWith('accent-'));
+  if (accentClasses.length !== 1 || !ACCENT_CLASSES.includes(accentClasses[0]))
+    fail('accent', `<body> 的 accent class 应恰好是 accent-orange 或 accent-blue 之一，实际 “${bodyClasses.join(' ') || '(空)'}”`);
+}
 
 for (const [i, s] of sections.entries()) {
   const tag = `page${String(i + 1).padStart(2, '0')}`;
@@ -91,39 +111,85 @@ for (const [i, s] of sections.entries()) {
     }
   }
 
-  // ---------- intro ----------
-  const introInner = pick(s, 'intro');
-  if (introInner === null) fail(tag, '缺少 .intro');
-  else {
-    if (/<(ul|ol|table|pre|code|img)\b/i.test(introInner)) fail(tag, '.intro 只允许 <p>，不许列表/表格/代码块/图片');
-    if (/<br\s*\/?>/i.test(introInner)) fail(tag, '.intro 不允许手动 <br>');
-    if (EMOJI.test(introInner)) fail(tag, '.intro 出现 emoji');
-    const ps = [...introInner.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map((m) => m[1]);
-    if (ps.length < 1 || ps.length > 2) fail(tag, `.intro ${ps.length} 段，应为 1–2 段`);
-    let lines = 0;
-    ps.forEach((p, i2) => {
-      const l = Math.ceil(width(text(p)) / 24);
-      if (l > 10) fail(tag, `.intro 第 ${i2 + 1} 段 ${l} 行，单段上限 10 行（等于总行数上限——一段占满整个预算也可以）`);
-      lines += l;
-      if (!/^\s*<strong>[^<]+<\/strong>/i.test(p))
-        fail(tag, `.intro 第 ${i2 + 1} 段没有以 <strong>总结句</strong> 开头`);
-      if ((p.match(/<strong>/gi) || []).length > 1)
-        fail(tag, `.intro 第 ${i2 + 1} 段 <strong> 出现多次，一段只加粗开头的总结句`);
-    });
-    if (lines < 7) fail(tag, `.intro 共 ${lines} 行，下限 7 行（少于此 .grow 会留出明显空白）`);
-    else if (lines > 10) fail(tag, `.intro 共 ${lines} 行，上限 10 行（多于此图片会被顶出内容框）`);
-  }
+  const isCover = isCoverSec(s);
 
-  // ---------- photo ----------
-  const photoInner = pick(s, 'photo-frame');
-  if (photoInner === null) fail(tag, '缺少 .photo-frame');
-  else {
-    const imgs = [...photoInner.matchAll(/<img\b[^>]*src="([^"]*)"/gi)];
-    if (imgs.length !== 1) fail(tag, `.photo-frame 应有且只有 1 张 <img>，实际 ${imgs.length} 张`);
-    else if (!imgs[0][1] || imgs[0][1].includes('{{')) fail(tag, '.photo-frame 的 <img> 缺少真实 src（还是占位符 {{图片路径}}）');
+  if (isCover) {
+    // ---------- title（封面卡专属）----------
+    const titleInner = pick(s, 'title');
+    if (titleInner === null) fail(tag, '封面卡缺少 .title');
+    else {
+      if (EMOJI.test(titleInner)) fail(tag, '.title 出现 emoji');
+      const lines = [...titleInner.matchAll(/<p[^>]*class="[^"]*\btitle-line\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi)].map((m) => m[1]);
+      if (lines.length !== 2) fail(tag, `.title 应固定 2 行 .title-line，实际 ${lines.length} 行`);
+      else {
+        let total = 0;
+        lines.forEach((l, i2) => {
+          const w = width(text(l));
+          total += w;
+          if (w > 8) fail(tag, `.title 第 ${i2 + 1} 行 ${w} 字宽，单行上限 8`);
+        });
+        if (total > 16) fail(tag, `.title 共 ${total} 字宽，总上限 16`);
+      }
+    }
+
+    // ---------- intro（封面卡：固定 1 段，不加粗）----------
+    const introInner = pick(s, 'intro');
+    if (introInner === null) fail(tag, '缺少 .intro');
+    else {
+      if (/<(ul|ol|table|pre|code|img|strong|em)\b/i.test(introInner)) fail(tag, '.intro 只允许纯 <p>，不许列表/表格/代码块/图片/加粗/斜体');
+      if (/<br\s*\/?>/i.test(introInner)) fail(tag, '.intro 不允许手动 <br>');
+      if (EMOJI.test(introInner)) fail(tag, '.intro 出现 emoji');
+      const ps = [...introInner.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map((m) => m[1]);
+      if (ps.length !== 1) fail(tag, `封面卡 .intro ${ps.length} 段，应固定 1 段`);
+      let lines = 0;
+      ps.forEach((p, i2) => {
+        const l = Math.ceil(width(text(p)) / 24);
+        if (l > 4) fail(tag, `.intro 第 ${i2 + 1} 段 ${l} 行，单段上限 4 行`);
+        lines += l;
+      });
+      if (lines !== 4) fail(tag, `.intro 共 ${lines} 行，应固定 4 行（少于此封面偏空，多于此图片上方留白过挤）`);
+    }
+
+    // ---------- photo（仅封面卡）----------
+    const photoInner = pick(s, 'photo-frame');
+    if (photoInner === null) fail(tag, '封面卡缺少 .photo-frame');
+    else {
+      const imgs = [...photoInner.matchAll(/<img\b[^>]*src="([^"]*)"/gi)];
+      if (imgs.length !== 1) fail(tag, `.photo-frame 应有且只有 1 张 <img>，实际 ${imgs.length} 张`);
+      else if (!imgs[0][1] || imgs[0][1].includes('{{')) fail(tag, '.photo-frame 的 <img> 缺少真实 src（还是占位符 {{图片路径}}）');
+    }
+    if ((s.match(/class="[^"]*\bphoto-frame\b/gi) || []).length > 1)
+      fail(tag, '一张卡只能有 1 个 .photo-frame');
+  } else {
+    // ---------- 内容卡：title 固定 1 行；不许有 photo-frame ----------
+    if (/\bphoto-frame\b/.test(s)) fail(tag, '内容卡不许有 .photo-frame，图片只出现在长文模式的封面卡');
+
+    const titleInner = pick(s, 'title');
+    if (titleInner === null) fail(tag, '内容卡缺少 .title');
+    else {
+      if (EMOJI.test(titleInner)) fail(tag, '.title 出现 emoji');
+      const lines = [...titleInner.matchAll(/<p[^>]*class="[^"]*\btitle-line\b[^"]*"[^>]*>([\s\S]*?)<\/p>/gi)].map((m) => m[1]);
+      if (lines.length !== 1) fail(tag, `内容卡 .title 应固定 1 行 .title-line，实际 ${lines.length} 行`);
+      else {
+        const w = width(text(lines[0]));
+        if (w > 13) fail(tag, `.title ${w} 字宽，单行上限 13`);
+      }
+    }
+
+    // ---------- intro（内容卡：1–3 段，单段不限长，合计 6–14 行，纯正文）----------
+    const introInner = pick(s, 'intro');
+    if (introInner === null) fail(tag, '缺少 .intro');
+    else {
+      if (/<(ul|ol|table|pre|code|img|strong|b|em)\b/i.test(introInner)) fail(tag, '.intro 只允许纯 <p>，不许列表/表格/代码块/图片/加粗/斜体');
+      if (/<br\s*\/?>/i.test(introInner)) fail(tag, '.intro 不允许手动 <br>');
+      if (EMOJI.test(introInner)) fail(tag, '.intro 出现 emoji');
+      const ps = [...introInner.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)].map((m) => m[1]);
+      if (ps.length < 1 || ps.length > 3) fail(tag, `内容卡 .intro ${ps.length} 段，应为 1–3 段`);
+      const lines = ps.reduce((n, p) => n + Math.ceil(width(text(p)) / 24), 0);
+      if (lines < 6) fail(tag, `.intro 共 ${lines} 行，下限 6 行`);
+      if (lines > 14) fail(tag, `.intro 共 ${lines} 行，上限 14 行`);
+    }
   }
-  if ((s.match(/class="[^"]*\bphoto-frame\b/gi) || []).length > 1)
-    fail(tag, '一张卡只能有 1 个 .photo-frame');
 }
 
 // ---------- report ----------

@@ -9,14 +9,20 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <style>
     /* =========================================================
-       Social Photo Cards — 1 card = header + 1–2 段短文案 + 1 张图
+       Social Photo Cards — 两种卡：封面卡 + 内容卡，两种出图模式，见 layout-spec.md
        ---------------------------------------------------------
        ONE board size: .poster = 1080×1440
        Content box after padding = 920 × 1344
+       title 字号/行高：封面 112px/1.32（每行 ≤8 字宽）；内容卡 66px/1.32（每行 ≤13 字宽）
        intro 字号/行高：38px/1.75 → 每行 66.5px，每行 ≤24 字宽（实测标定，见 layout-spec.md）
 
-       Fixed vertical order, no others:
-         profile-head → intro → photo → grow
+       单页模式 = 1 张内容卡；长文模式 = 1 张封面卡 + N（≥1）张内容卡（章节卡）。
+
+       封面卡（section 带 .cover，只在长文模式第 1 张）固定竖向顺序：
+         profile-head → title（2 行）→ intro（1 段，固定 4 行，纯正文）→ photo → grow
+
+       内容卡固定竖向顺序：
+         profile-head → title（1 行，≤13 字宽）→ intro（1–3 段，单段不限长，合计 6–14 行，纯正文）→ grow
 
        All sizes are FIXED. Do not add inline font-size / font-weight.
        ========================================================= */
@@ -24,8 +30,8 @@
     :root {
       --paper: #ffffff; --ink: #111111;
       --grey-2: #e7e6e1; --grey-3: #8a8a86;
-      --accent: #ff6b35; /* 边框 + 昵称共用的强调色，不做多套切换 */
-      --verified: #1d6fd6; /* 认证图标专用，独立于 accent，固定蓝色 */
+      --accent: #ff6b35; /* 边框 + 昵称共用的强调色，默认橙色；body 加 .accent-blue 整批切成蓝色，二选一，见下方 */
+      --verified: #1d6fd6; /* 认证图标专用，独立于 accent，固定蓝色，不随 accent 切换 */
       --sans:    "Inter", "Helvetica Neue", Helvetica, "Noto Sans SC",
                  -apple-system, "PingFang SC", "Microsoft YaHei UI", sans-serif;
       --sans-zh: "Noto Sans SC", -apple-system, "PingFang SC",
@@ -41,6 +47,12 @@
       --account-name: "未来的哇咔咔";
       --account-bio: "专注于需求研究、副业机会分析";
     }
+
+    /* ---------- accent 颜色：body 加对应 class 整批切换，固定二选一 ----------
+       .accent-orange 是默认色（和 :root 里的 --accent 基准值一致），.accent-blue 是唯一的
+       另一个选项。不接受自定义色值，不新增第三个颜色。 */
+    body.accent-orange { --accent: #ff6b35; }
+    body.accent-blue { --accent: #2563eb; }
 
     *,*::before,*::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
@@ -117,18 +129,30 @@
       letter-spacing: .12em; color: var(--grey-3); flex: 0 0 auto;
     }
 
-    /* ---------- intro：1–2 段，行数预算见 layout-spec.md ----------
-       每段第一句是这段的总结句，加粗 + 下划线；用 <strong> 包住，不是 <em>。 */
+    /* ---------- title：封面卡 112px 固定 2 行 / 内容卡 66px 固定 1 行 ----------
+       行是独立的 .title-line 元素，不靠自动换行——字数是内容约束，不是排版猜测。
+       内容卡只有 1 个 .title-line，不许写成两行。封面靠 section 上的 .cover 识别——
+       不能用 #p01（单页模式的内容卡也是 p01）或 :first-of-type（渲染器单卡渲染，
+       每张都会命中）。内容卡标题带下划线，是正文之上唯一的视觉锚点；封面大标题
+       不带——112px 巨字压下划线过重。 */
+    .title { margin-bottom: 32px; }
+    .title-line {
+      font-family: var(--sans-zh); font-weight: 700;
+      font-size: 66px; line-height: 1.32;
+      color: var(--ink);
+      text-decoration: underline;
+      text-decoration-thickness: 4px;
+      text-underline-offset: 8px;
+    }
+    .cover .title-line { font-size: 112px; text-decoration: none; }
+
+    /* ---------- intro：封面卡 1 段 / 内容卡 1–3 段，全部纯正文不加粗，行数预算见 layout-spec.md ---------- */
     .intro p {
       font-family: var(--sans-zh); font-weight: 400;
       font-size: 38px; line-height: 1.75;
       color: var(--ink);
     }
     .intro p + p { margin-top: 28px; }
-    .intro strong {
-      font-weight: 700; text-decoration: underline;
-      text-decoration-thickness: 2px; text-underline-offset: 5px;
-    }
     .intro { margin-bottom: 32px; }
 
     /* ---------- photo：固定 920×460（2:1），拉伸铺满，不裁切 ---------- */
@@ -142,14 +166,16 @@
     .poster *[style*="font-weight"] { outline: 4px solid red !important; }
   </style>
 </head>
-<body>
+<body class="accent-orange">
   <main class="sheet">
 
     <!-- ============================================================
-         PAGE 01 — 复制这个 section 为每一张卡，id 依次 p01 / p02 …
-         页码 .page-index 按 “当前页 / 总页数” 填，如 3 张卡就是 01/03 02/03 03/03
+         PAGE 01 — 封面卡，只用于长文模式，整批只有这一张，结构固定：
+         profile-head → title → intro（1 段）→ photo → grow
+         单页模式：删掉这整个 section，把下面的内容卡 id 改成 p01、页码填 01 / 01
+         页码 .page-index 按 “当前页 / 总页数” 填，如 4 张卡就是 01/04
          ============================================================ -->
-    <section class="poster" id="p01">
+    <section class="poster cover" id="p01">
       <div class="content">
         <div class="profile-head">
           <div class="profile-id">
@@ -161,15 +187,53 @@
               <span class="profile-bio"></span>
             </div>
           </div>
-          <span class="page-index">01 / 01</span>
+          <span class="page-index">01 / 02</span>
+        </div>
+
+        <div class="title">
+          <p class="title-line">大标题第一行</p>
+          <p class="title-line">大标题第二行</p>
         </div>
 
         <div class="intro">
-          <p><strong>这一句是本段总结句，加粗加下划线。</strong>后面接展开说明，按 references/layout-spec.md 的行预算表控制总行数，7–10 行为宜，不要靠改字号解决溢出。</p>
+          <p>封面正文：2–3 个平行结构的短例先立住张力，再交代来源和结构预告。固定 4 行，不多不少——少了封面偏空，多了图片上方的留白会被挤掉。行数只能靠改文案调，不许动字号。</p>
         </div>
 
         <div class="photo-frame">
           <img src="{{图片路径}}" alt="">
+        </div>
+
+        <div class="grow"></div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         内容卡 — 长文模式下是章节卡，一章一张，复制这个 section，id 依次 p02 / p03 …
+         结构固定：profile-head → title（1 行）→ intro（1–3 段）→ grow，没有 photo-frame
+         页码 .page-index 按 “当前页 / 总页数” 填
+         ============================================================ -->
+    <section class="poster" id="p02">
+      <div class="content">
+        <div class="profile-head">
+          <div class="profile-id">
+            <div class="avatar" aria-hidden="true"></div>
+            <div class="profile-text">
+              <span class="profile-name"><span class="name-text"></span>
+                <svg class="verified" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M1006.652621 469.673144l-114.751779-114.751778V192.356347a60.318243 60.318243 0 0 0-60.318242-59.950449H669.385374L554.633596 17.65412a59.950448 59.950448 0 0 0-84.960452 0L354.921366 132.405898H192.356347A59.950448 59.950448 0 0 0 132.405898 192.356347v162.565019L17.65412 469.673144a59.950448 59.950448 0 0 0 0 84.960452L132.405898 669.385374v162.197226a59.950448 59.950448 0 0 0 59.950449 59.950448h162.565019l114.751778 115.119573a60.686037 60.686037 0 0 0 84.960452 0l114.751778-115.119573h162.197226a60.318243 60.318243 0 0 0 60.318242-59.950448V669.385374l114.751779-114.751778a60.686037 60.686037 0 0 0 0-84.960452z m-36.779417 49.652212l-116.590749 116.59075a44.503094 44.503094 0 0 0-12.872796 31.262503v164.403991a10.666031 10.666031 0 0 1-10.66603 10.66603h-162.56502a43.767505 43.767505 0 0 0-31.262503 12.872796l-116.222956 116.222955a10.298237 10.298237 0 0 1-15.07956 0l-116.222955-116.222955a43.767505 43.767505 0 0 0-31.262504-12.872796H192.356347a10.666031 10.666031 0 0 1-10.298237-10.66603v-164.403991a43.399711 43.399711 0 0 0-13.24059-31.262503l-116.222955-116.59075a10.298237 10.298237 0 0 1 0-14.711766l116.222955-116.222955a44.135299 44.135299 0 0 0 13.24059-31.630298V192.356347A10.298237 10.298237 0 0 1 192.356347 183.897081h164.771784a44.135299 44.135299 0 0 0 31.262504-13.24059l118.061926-118.061926a11.033825 11.033825 0 0 1 7.355883-2.942353 11.401619 11.401619 0 0 1 7.723677 2.942353l116.222955 116.222955a44.135299 44.135299 0 0 0 31.262504 13.24059h164.40399a10.298237 10.298237 0 0 1 10.666031 10.298237V356.760337a45.606476 45.606476 0 0 0 12.872796 31.630298l116.590749 116.222955a10.298237 10.298237 0 0 1-1.838971 14.711766z"/><path d="M693.659789 331.014746l-187.207228 274.374444-141.232958-110.338248c-16.182943 0-24.642209 8.459266-24.642209 26.848973l176.173403 159.254872 207.803702-331.014745c5.516912-9.930442-23.538826-31.262504-30.89471-19.125296z"/></svg>
+              </span>
+              <span class="profile-bio"></span>
+            </div>
+          </div>
+          <span class="page-index">02 / 02</span>
+        </div>
+
+        <div class="title">
+          <p class="title-line">内容卡标题固定一行</p>
+        </div>
+
+        <div class="intro">
+          <p>正文 1–3 段，单段长度不限，合计 6–14 行，全部纯正文不加粗。段数跟着内容走：一个论点讲透就是一段，论点加事例加结论可以分成三段。</p>
+          <p>段与段之间是往下走的关系，不是并列的碎片——把段间空行删掉连起来读，应该是一段通顺的话。行数只能靠改文案调，不许动字号，也不许为了凑行数补没有内容的句子。</p>
         </div>
 
         <div class="grow"></div>
